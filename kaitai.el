@@ -40,9 +40,10 @@
   (message "toggle-node"))
 
 (defun kaitai--insert-seq (seq depth)
-  (dolist (element seq)
-    (kaitai--insert-seq-element element depth)
-    (insert "\n")))
+  (kaitai--insert-seq-element (car seq) depth)
+  (dolist (element (cdr seq))
+    (insert "\n")
+    (kaitai--insert-seq-element element depth)))
 
 (defun kaitai--insert-seq-element (element depth)
   (let ((id (nth 0 element))
