@@ -19,20 +19,20 @@
   '(product
      (header
       (product
-        (magic "= [128, 55, 18, 64]")
+        (magic (contents "NES\x1a"))
         (clock "= 0xF = 15")
         (pc "= 0x80080000 = 2148007936")
         (release "= 0x144B = 5195")
         (crc1 "= 0x5354631C = 1398039324")
         (crc2 "= 0x3A2DEF0 = 61005552")
-        (reserved1 "= [0, 0, 0, 0, 0, 0, 0, 0]")
+        (reserved1 (contents 0 0 0 0 0 0 0 0))
         (name "= ZELDA MAJORA'S MASK")
-        (reserved2 "= [0, 0, 0, 0, 0, 0, 0]")
+        (reserved2 (contents 0 0 0 0 0 0 0))
         (id
          (product
            (game-id "= NZS")
            (region "= USA (0x45 = 69)")))
-        (reserved3 "= [0]")))
+        (reserved3 (contents 0))))
      (boot-code "= [3, 160, 72, 32, 141, 40, 240, 16, ...]")
      (code "= [60, 8, 128, 10, 37, 8, 149, 0, ...]")))
 
@@ -51,10 +51,12 @@
             (args (cdr body)))
         ;; TODO: Use when given symbol
         ;; (if id (insert "[" (symbol-name id) "]"))
-        (kaitai--insert-newline depth)
         (cond
          ((eq type 'product)
+          (kaitai--insert-newline depth)
           (kaitai--insert-product args depth))
+         ((eq type 'contents)
+          (kaitai--insert-contents args depth))
          t (error "unexpected type: %s" type)))
     (kaitai--insert-leaf body)))
 
@@ -82,6 +84,12 @@
 
 (defun kaitai--insert-id (id)
   (insert (symbol-name id)))
+
+(defun kaitai--insert-contents (contents depth)
+  (insert-char ?=)
+  (insert-char ?\s)
+  (dolist (content contents)
+    (insert (prin1-to-string content))))
 
 (defun kaitai--insert-leaf (leaf)
   (insert leaf))
