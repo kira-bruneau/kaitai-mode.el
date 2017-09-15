@@ -16,9 +16,9 @@
 
 ;; TODO: Obtain leaf data from original buffer
 (defvar kaitai-schema
-  '(product z64
+  '(product
      (header
-      (product header
+      (product
         (magic "= [128, 55, 18, 64]")
         (clock "= 0xF = 15")
         (pc "= 0x80080000 = 2148007936")
@@ -29,7 +29,7 @@
         (name "= ZELDA MAJORA'S MASK")
         (reserved2 "= [0, 0, 0, 0, 0, 0, 0]")
         (id
-         (product id
+         (product
            (game-id "= NZS")
            (region "= USA (0x45 = 69)")))
         (reserved3 "= [0]")))
@@ -48,9 +48,9 @@
 (defun kaitai--insert-body (body depth)
   (if (listp body)
       (let ((type (car body))
-            (id (cadr body))
-            (args (cddr body)))
-        (if id (insert "[" (capitalize (symbol-name id)) "]"))
+            (args (cdr body)))
+        ;; TODO: Use when given symbol
+        ;; (if id (insert "[" (symbol-name id) "]"))
         (kaitai--insert-newline depth)
         (cond
          ((eq type 'product)
