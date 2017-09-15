@@ -7,9 +7,6 @@
     (define-key map (kbd "RET") 'kaitai-toggle-node)
     map))
 
-(defvar kaitai-schema nil
-  "Schema used to parse file")
-
 (define-derived-mode kaitai-mode fundemental-mode "Kaitai"
   ;; 1) Store the buffer contents somewhere hidden (eg. hidden buffer)
   ;; 2) Set the encoding to UTF-8
@@ -29,15 +26,16 @@
         ("reserved2" "= [0, 0, 0, 0, 0, 0, 0]")
         ("id" "[Id]"
          (("gameId" "= NZS")
-           ("region" "= USA (0x45 = 69)")))
-        ("reserved3" "= [0]")))
+           ("region" "= USA (0x45 = 69)")) nil)
+        ("reserved3" "= [0]")) t)
      ("bootCode" "= [3, 160, 72, 32, 141, 40, 240, 16, ...]")
      ("code" "= [60, 8, 128, 10, 37, 8, 149, 0, ...]")) 0))
 
 (defun kaitai-toggle-expand ()
   "Expand / collapse the kaitai struct node at point"
   (interactive)
-  (message "toggle-node"))
+  ;; TODO: Find the seq element that falls under this point!
+  (message "toggle-expand"))
 
 (defun kaitai--insert-seq (seq depth)
   (kaitai--insert-seq-element (car seq) depth)
@@ -48,14 +46,15 @@
 (defun kaitai--insert-seq-element (element depth)
   (let ((id (nth 0 element))
         (summary (nth 1 element))
-        (seq (nth 2 element)))
+        (seq (nth 2 element))
+        (open (nth 3 element)))
     (insert-char ?\s (* depth 2))
-    (kaitai--insert-expand-symbol (if seq 'close))
+    (kaitai--insert-expand-symbol (if seq (if open 'close 'open)))
     (insert " ")
     (kaitai--insert-id (nth 0 element))
     (insert " ")
     (kaitai--insert-summary (nth 1 element))
-    (when seq
+    (when (and seq open)
       (insert "\n")
       (kaitai--insert-seq (nth 2 element) (1+ depth)))))
 
