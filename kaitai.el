@@ -1,21 +1,25 @@
 ;; References: org-mode, neotree
-;; TODO: Integrate with vlf package
-;; TODO: Create an index from each .ksy "contents" fields to auto detect the format
+;; TODO: Integrate with vlf package to support large files
+
+(define-derived-mode kaitai-mode fundamental-mode "Kaitai"
+  ;; TODO: Store the original contents of the buffer as a unibyte buffer,
+  ;;       use it to generate leaf nodes of tree
+  ;; TODO: Automatically detect kaitai-schema from contents of buffer
+  (erase-buffer)
+  (kaitai--insert-body kaitai-schema 0))
 
 (defvar kaitai-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "RET") 'kaitai-toggle-node)
+    (define-key map (kbd "TAB") 'kaitai-toggle-expand)
+    (define-key map (kbd "RET") 'kaitai-toggle-expand)
     map))
 
-(define-derived-mode kaitai-mode fundemental-mode "Kaitai"
-  ;; 1) Store the buffer contents somewhere hidden (eg. hidden buffer)
-  ;; 2) Set the encoding to UTF-8
-  ;; 3) Re-render tree based on schema + file contents
-
-  (erase-buffer)
-  (kaitai--insert-seq
-   '(("header" "[Header]"
-      (("magic" "= [128, 55, 18, 64]")
+;; TODO: Obtain leaf node data from original buffer
+(defvar kaitai-schema
+  '("z64"
+    (("header"
+      ("header"
+       (("magic" "= [128, 55, 18, 64]")
         ("clock" "= 0xF = 15")
         ("pc" "= 0x80080000 = 2148007936")
         ("release" "= 0x144B = 5195")
@@ -24,61 +28,66 @@
         ("reserved1" "= [0, 0, 0, 0, 0, 0, 0, 0]")
         ("name" "= ZELDA MAJORA'S MASK")
         ("reserved2" "= [0, 0, 0, 0, 0, 0, 0]")
-        ("id" "[Id]"
-         (("gameId" "= NZS")
-           ("region" "= USA (0x45 = 69)")) nil)
-        ("reserved3" "= [0]")) t)
+        ("id"
+         ("id"
+          (("gameId" "= NZS")
+           ("region" "= USA (0x45 = 69)"))))
+        ("reserved3" "= [0]"))))
      ("bootCode" "= [3, 160, 72, 32, 141, 40, 240, 16, ...]")
-     ("code" "= [60, 8, 128, 10, 37, 8, 149, 0, ...]")) 0))
+     ("code" "= [60, 8, 128, 10, 37, 8, 149, 0, ...]"))))
+
+(defvar kaitai--expand-state nil)
 
 (defun kaitai-toggle-expand ()
   "Expand / collapse the kaitai struct node at point"
   (interactive)
-  ;; TODO: Find the seq element that falls under this point!
-  (message "toggle-expand"))
+  ;; TODO: walk through both kaitai-schema & kaitai--expand-state to find the node to expand
+  ;; Then toggle the associated node in kaitai--expand-state
+  (line-number-at-pos (point)))
+
+(defun kaitai--insert-body (body depth)
+  (cond
+   ((kaitai--body-expandable-p body)
+    (let ((id (nth 0 body))
+          (seq (nth 1 body)))
+      (insert "[" (capitalize id) "]")
+      (kaitai--insert-newline depth)
+      (kaitai--insert-seq seq depth)))
+   (t
+    (kaitai--insert-leaf body))))
+
+(defun kaitai--body-expandable-p (body)
+  (listp body))
 
 (defun kaitai--insert-seq (seq depth)
-  (kaitai--insert-seq-element (car seq) depth)
-  (dolist (element (cdr seq))
-    (insert "\n")
-    (kaitai--insert-seq-element element depth)))
+  (kaitai--insert-node (car seq) depth)
+  (dolist (node (cdr seq))
+    (kaitai--insert-newline depth)
+    (kaitai--insert-node node depth)))
 
-(defun kaitai--insert-seq-element (element depth)
-  (let ((id (nth 0 element))
-        (summary (nth 1 element))
-        (seq (nth 2 element))
-        (open (nth 3 element)))
-    (insert-char ?\s (* depth 2))
-    (kaitai--insert-expand-symbol (if seq (if open 'close 'open)))
-    (insert " ")
-    (kaitai--insert-id (nth 0 element))
-    (insert " ")
-    (kaitai--insert-summary (nth 1 element))
-    (when (and seq open)
-      (insert "\n")
-      (kaitai--insert-seq (nth 2 element) (1+ depth)))))
+(defun kaitai--insert-node (node depth)
+  (let* ((id (nth 0 node))
+         (body (nth 1 node)))
+    (kaitai--insert-expand-symbol
+     (if (kaitai--body-expandable-p body) 'close))
+    (insert-char ?\s)
+    (kaitai--insert-id id)
+    (insert-char ?\s)
+    (kaitai--insert-body body (1+ depth))))
 
 (defun kaitai--insert-expand-symbol (type)
-  (cond
-   ((eq type 'open) (insert "+"))
-   ((eq type 'close) (insert "-"))
-   (t (insert " "))))
+  (insert-char
+   (cond
+    ((eq type 'open) ?+)
+    ((eq type 'close) ?-)
+    (t ?\s))))
 
 (defun kaitai--insert-id (id)
   (insert id))
 
-(defun kaitai--insert-summary (summary)
-  (insert summary))
+(defun kaitai--insert-leaf (leaf)
+  (insert leaf))
 
-;; Create a new buffer that is based on another buffer
-
-;; Okay, I want to translate this into a view that I can edit
-
-
-;; This is a view on top of the original text... It doesn't necessarily replace it
-
-;; Kaitai mode should auto detect the format from the file extension / the magic
-;; If the format is ambiguious, ask the user to diambiguated it
-
-
-;; Any changes in this buffer should affect changes in the other buffer
+(defun kaitai--insert-newline (depth)
+  (newline)
+  (insert-char ?\s (* depth 2)))
