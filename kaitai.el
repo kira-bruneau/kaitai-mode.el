@@ -16,25 +16,25 @@
 
 ;; TODO: Obtain leaf node data from original buffer
 (defvar kaitai-schema
-  '("z64"
-    (("header"
-      ("header"
-       (("magic" "= [128, 55, 18, 64]")
-        ("clock" "= 0xF = 15")
-        ("pc" "= 0x80080000 = 2148007936")
-        ("release" "= 0x144B = 5195")
-        ("crc1" "= 0x5354631C = 1398039324")
-        ("crc2" "= 0x3A2DEF0 = 61005552")
-        ("reserved1" "= [0, 0, 0, 0, 0, 0, 0, 0]")
-        ("name" "= ZELDA MAJORA'S MASK")
-        ("reserved2" "= [0, 0, 0, 0, 0, 0, 0]")
-        ("id"
-         ("id"
-          (("gameId" "= NZS")
-           ("region" "= USA (0x45 = 69)"))))
-        ("reserved3" "= [0]"))))
-     ("bootCode" "= [3, 160, 72, 32, 141, 40, 240, 16, ...]")
-     ("code" "= [60, 8, 128, 10, 37, 8, 149, 0, ...]"))))
+  '(z64
+    ((header
+      (header
+       ((magic "= [128, 55, 18, 64]")
+        (clock "= 0xF = 15")
+        (pc "= 0x80080000 = 2148007936")
+        (release "= 0x144B = 5195")
+        (crc1 "= 0x5354631C = 1398039324")
+        (crc2 "= 0x3A2DEF0 = 61005552")
+        (reserved1 "= [0, 0, 0, 0, 0, 0, 0, 0]")
+        (name "= ZELDA MAJORA'S MASK")
+        (reserved2 "= [0, 0, 0, 0, 0, 0, 0]")
+        (id
+         (id
+          ((gameId "= NZS")
+           (region "= USA (0x45 = 69)"))))
+        (reserved3 "= [0]"))))
+     (bootCode "= [3, 160, 72, 32, 141, 40, 240, 16, ...]")
+     (code "= [60, 8, 128, 10, 37, 8, 149, 0, ...]"))))
 
 (defvar kaitai--expand-state nil)
 
