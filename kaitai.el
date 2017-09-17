@@ -4,9 +4,9 @@
 (define-derived-mode kaitai-mode fundamental-mode "Kaitai"
   ;; TODO: Store the original contents of the buffer as a unibyte buffer,
   ;;       use it to generate leaves of tree
-  ;; TODO: Automatically detect kaitai-schema from contents of buffer
+  ;; TODO: Automatically detect kaitai--schema from contents of buffer
   (erase-buffer)
-  (kaitai--insert-body kaitai-schema 0))
+  (kaitai--insert-node kaitai--schema kaitai--expand-state 0))
 
 (defvar kaitai-mode-map
   (let ((map (make-sparse-keymap)))
@@ -15,65 +15,75 @@
     map))
 
 ;; TODO: Obtain leaf data from original buffer
-(defvar kaitai-schema
+;; TODO: Consider replacing product alist with plist
+(defvar kaitai--schema
   '(product
-     (header
-      (product
-        (magic (contents "NES\x1a"))
-        (clock "= 0xF = 15")
-        (pc "= 0x80080000 = 2148007936")
-        (release "= 0x144B = 5195")
-        (crc1 "= 0x5354631C = 1398039324")
-        (crc2 "= 0x3A2DEF0 = 61005552")
-        (reserved1 (contents 0 0 0 0 0 0 0 0))
-        (name "= ZELDA MAJORA'S MASK")
-        (reserved2 (contents 0 0 0 0 0 0 0))
-        (id
-         (product
-           (game-id "= NZS")
-           (region "= USA (0x45 = 69)")))
-        (reserved3 (contents 0))))
-     (boot-code "= [3, 160, 72, 32, 141, 40, 240, 16, ...]")
-     (code "= [60, 8, 128, 10, 37, 8, 149, 0, ...]")))
+    (:header
+     (product
+      (:magic (contents "NES\x1a"))
+      (:clock "= 0xF = 15")
+      (:pc "= 0x80080000 = 2148007936")
+      (:release "= 0x144B = 5195")
+      (:crc1 "= 0x5354631C = 1398039324")
+      (:crc2 "= 0x3A2DEF0 = 61005552")
+      (:reserved1 (contents 0 0 0 0 0 0 0 0))
+      (:name "= ZELDA MAJORA'S MASK")
+      (:reserved2 (contents 0 0 0 0 0 0 0))
+      (:id
+       (product
+        (:game-id "= NZS")
+        (:region "= USA (0x45 = 69)")))
+      (:reserved3 (contents 0))))
+    (:boot-code "= [3, 160, 72, 32, 141, 40, 240, 16, ...]")
+    (:code "= [60, 8, 128, 10, 37, 8, 149, 0, ...]")))
 
 (defvar kaitai--expand-state nil)
 
 (defun kaitai-toggle-expand ()
-  "Expand / collapse the kaitai product at point"
+  "Expand / collapse the kaitai node at point"
   (interactive)
-  ;; TODO: walk through both kaitai-schema & kaitai--expand-state to find the product to expand
-  ;; Then toggle the associated product in kaitai--expand-state
+  ;; TODO: walk through both kaitai--schema & kaitai--expand-state to find the node to expand
+  ;; Then toggle the associated node in kaitai--expand-state
   (line-number-at-pos (point)))
 
-(defun kaitai--insert-body (body depth)
-  (if (listp body)
-      (let ((type (car body))
-            (args (cdr body)))
-        ;; TODO: Use when given symbol
-        ;; (if id (insert "[" (symbol-name id) "]"))
+(defun kaitai--insert-node (node expand-state depth)
+  (if (listp node)
+      (let ((type (car node))
+            (args (cdr node)))
         (cond
          ((eq type 'product)
-          (kaitai--insert-newline depth)
-          (kaitai--insert-product args depth))
+          (unless (zerop depth)
+            (kaitai--insert-newline depth))
+          (kaitai--insert-product args expand-state depth))
          ((eq type 'contents)
-          (kaitai--insert-contents args depth))
+          (kaitai--insert-contents args))
          t (error "unexpected type: %s" type)))
-    (kaitai--insert-leaf body)))
+    (kaitai--insert-leaf node)))
 
-(defun kaitai--insert-product (product depth)
-  (kaitai--insert-node (car product) depth)
-  (dolist (node (cdr product))
-    (kaitai--insert-newline depth)
-    (kaitai--insert-node node depth)))
+(defun kaitai--node-expandable-p (node)
+  (and (listp node) (eq (car node) 'product)))
 
-(defun kaitai--insert-node (node depth)
-  (let ((id (car node))
-        (body (cadr node)))
-    (kaitai--insert-expand-symbol 'close)
+(defun kaitai--insert-product (product expand-state depth)
+  (when product
+    (kaitai--insert-assoc (car product) (car expand-state) depth)
+    (setq product (cdr product))
+    (setq expand-state (cdr expand-state))
+    (while product
+      (kaitai--insert-newline depth)
+      (kaitai--insert-assoc (car product) (car expand-state) depth)
+      (setq product (cdr product))
+      (setq expand-state (cdr expand-state)))))
+
+(defun kaitai--insert-assoc (assoc expand-state depth)
+  (let ((id (car assoc))
+        (node (cadr assoc)))
+    (kaitai--insert-expand-symbol
+     (if (kaitai--node-expandable-p node)
+         (if expand-state 'close 'open)))
     (insert-char ?\s)
     (kaitai--insert-id id)
     (insert-char ?\s)
-    (kaitai--insert-body body (1+ depth))))
+    (kaitai--insert-node node expand-state (1+ depth))))
 
 (defun kaitai--insert-expand-symbol (type)
   (insert-char
@@ -83,13 +93,21 @@
     (t ?\s))))
 
 (defun kaitai--insert-id (id)
-  (insert (symbol-name id)))
+  (insert (substring (symbol-name id) 1)))
 
-(defun kaitai--insert-contents (contents depth)
+(defun kaitai--insert-contents (contents)
   (insert-char ?=)
   (insert-char ?\s)
-  (dolist (content contents)
-    (insert (prin1-to-string content))))
+  (insert-char ?\[)
+
+  (let ((content (car contents)))
+    (when content
+      (insert (prin1-to-string content))
+      (dolist (content (cdr contents))
+        (insert ", ")
+        (insert (prin1-to-string content)))))
+
+  (insert-char ?\]))
 
 (defun kaitai--insert-leaf (leaf)
   (insert leaf))
