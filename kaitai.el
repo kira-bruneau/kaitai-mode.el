@@ -20,7 +20,7 @@
   '(product
     (:header
      (product
-      (:magic (contents "NES\x1a"))
+      (:magic (contents 0x80 0x37 0x12 0x40))
       (:clock "= 0xF = 15")
       (:pc "= 0x80080000 = 2148007936")
       (:release "= 0x144B = 5195")
@@ -52,9 +52,16 @@
             (args (cdr node)))
         (cond
          ((eq type 'product)
-          (unless (zerop depth)
-            (kaitai--insert-newline depth))
           (kaitai--insert-product args expand-state depth))
+         ((eq type 'contents))
+         t (error "unexpected type: %s" type)))))
+
+(defun kaitai--insert-node-summary (node)
+  (if (listp node)
+      (let ((type (car node))
+            (args (cdr node)))
+        (cond
+         ((eq type 'product))
          ((eq type 'contents)
           (kaitai--insert-contents args))
          t (error "unexpected type: %s" type)))
@@ -65,25 +72,31 @@
 
 (defun kaitai--insert-product (product expand-state depth)
   (when product
-    (kaitai--insert-assoc (car product) (car expand-state) depth)
+    (kaitai--insert-assoc (car product) expand-state depth)
     (setq product (cdr product))
     (setq expand-state (cdr expand-state))
     (while product
       (kaitai--insert-newline depth)
-      (kaitai--insert-assoc (car product) (car expand-state) depth)
+      (kaitai--insert-assoc (car product) expand-state depth)
       (setq product (cdr product))
       (setq expand-state (cdr expand-state)))))
 
 (defun kaitai--insert-assoc (assoc expand-state depth)
   (let ((id (car assoc))
-        (node (cadr assoc)))
+        (node (cadr assoc))
+        (expanded (car expand-state))
+        (node-expand-state (cdr expand-state)))
     (kaitai--insert-expand-symbol
-     (if (kaitai--node-expandable-p node)
-         (if expand-state 'close 'open)))
+     (when (kaitai--node-expandable-p node)
+       (if expanded 'close 'open)))
     (insert-char ?\s)
     (kaitai--insert-id id)
     (insert-char ?\s)
-    (kaitai--insert-node node expand-state (1+ depth))))
+    (kaitai--insert-node-summary node)
+    (when (and (kaitai--node-expandable-p node) expanded)
+      (let ((depth (1+ depth)))
+        (kaitai--insert-newline depth)
+        (kaitai--insert-node node node-expand-state depth)))))
 
 (defun kaitai--insert-expand-symbol (type)
   (insert-char
