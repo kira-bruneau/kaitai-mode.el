@@ -107,9 +107,9 @@
       (kaitai--insert-expand-symbol
        (when (kaitai--node-expandable-p node)
          (if expanded 'close 'open)))
-      (insert-char ?\s)
+      (insert " ")
       (kaitai--insert-id id)
-      (insert-char ?\s)
+      (insert " ")
       (kaitai--insert-node-summary node)
       (when (and (kaitai--node-expandable-p node) expanded)
         (let ((depth (1+ depth)))
@@ -117,28 +117,24 @@
           (kaitai--insert-node node node-expand-state depth))))))
 
 (defun kaitai--insert-expand-symbol (type)
-  (insert-char
+  (insert
    (cond
-    ((eq type 'open) ?+)
-    ((eq type 'close) ?-)
-    (t ?\s))))
+    ((eq type 'open) "+")
+    ((eq type 'close) "-")
+    (t " "))))
 
 (defun kaitai--insert-id (id)
   (insert (substring (symbol-name id) 1)))
 
 (defun kaitai--insert-contents (contents)
-  (insert-char ?=)
-  (insert-char ?\s)
-  (insert-char ?\[)
-
+  (insert "= [")
   (let ((content (car contents)))
     (when content
       (insert (prin1-to-string content))
       (dolist (content (cdr contents))
         (insert ", ")
         (insert (prin1-to-string content)))))
-
-  (insert-char ?\]))
+  (insert "]"))
 
 (defun kaitai--insert-leaf (leaf)
   (insert leaf))
