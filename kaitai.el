@@ -9,9 +9,7 @@
 
     ;; TODO: Auto detect schema from source contents
     (setq kaitai--schema
-          (cond
-           (schema schema)
-           (t
+          (if schema schema
             '(product
               (:header
                (product
@@ -30,7 +28,7 @@
                   (:region "= USA (0x45 = 69)")))
                 (:reserved3 (contents 0))))
               (:boot-code "= [3, 160, 72, 32, 141, 40, 240, 16, ...]")
-              (:code "= [60, 8, 128, 10, 37, 8, 149, 0, ...]")))))
+              (:code "= [60, 8, 128, 10, 37, 8, 149, 0, ...]"))))
 
     (setq major-mode 'kaitai-mode)
     (setq mode-name "Kaitai")
@@ -71,60 +69,52 @@
 
 (defun kaitai--refresh ()
   (erase-buffer)
-  ;; TODO: Automatically detect kaitai--schema from contents of kaitai--source
   (kaitai--insert-node kaitai--schema kaitai--expand-state 0))
 
 (defun kaitai--insert-node (node expand-state depth)
-  (if (listp node)
-      (let ((type (car node))
-            (args (cdr node)))
-        (cond
-         ((eq type 'product)
-          (kaitai--insert-product args expand-state depth))
-         ((eq type 'contents))
-         t (error "unexpected type: %s" type)))))
+  (pcase node
+    (`(product . ,product)
+     (kaitai--insert-product product expand-state depth))
+    (`(contents . ,contents))
+    (node (error "unexpected node: %s" node))))
 
 (defun kaitai--insert-node-summary (node)
-  (if (listp node)
-      (let ((type (car node))
-            (args (cdr node)))
-        (cond
-         ((eq type 'product))
-         ((eq type 'contents)
-          (kaitai--insert-contents args))
-         t (error "unexpected type: %s" type)))
-    (kaitai--insert-leaf node)))
+  (pcase node
+    (`(product . ,product))
+    (`(contents . ,contents)
+     (kaitai--insert-contents contents))
+    (node (kaitai--insert-leaf node))))
 
 (defun kaitai--node-expandable-p (node)
-  (and (listp node) (eq (car node) 'product)))
+  (pcase node
+    (`(product . ,product) t)
+    (`(contents . ,contents) nil)
+    (node nil)))
 
 (defun kaitai--insert-product (product expand-state depth)
-  (when product
-    (kaitai--insert-assoc (car product) expand-state depth)
+  (kaitai--insert-assoc (car product) (car expand-state) depth)
+  (setq product (cdr product))
+  (setq expand-state (cdr expand-state))
+  (while product
+    (kaitai--insert-newline depth)
+    (kaitai--insert-assoc (car product) (car expand-state) depth)
     (setq product (cdr product))
-    (setq expand-state (cdr expand-state))
-    (while product
-      (kaitai--insert-newline depth)
-      (kaitai--insert-assoc (car product) expand-state depth)
-      (setq product (cdr product))
-      (setq expand-state (cdr expand-state)))))
+    (setq expand-state (cdr expand-state))))
 
 (defun kaitai--insert-assoc (assoc expand-state depth)
-  (let ((id (car assoc))
-        (node (cadr assoc))
-        (expanded (car expand-state))
-        (node-expand-state (cdr expand-state)))
-    (kaitai--insert-expand-symbol
-     (when (kaitai--node-expandable-p node)
-       (if expanded 'close 'open)))
-    (insert-char ?\s)
-    (kaitai--insert-id id)
-    (insert-char ?\s)
-    (kaitai--insert-node-summary node)
-    (when (and (kaitai--node-expandable-p node) expanded)
-      (let ((depth (1+ depth)))
-        (kaitai--insert-newline depth)
-        (kaitai--insert-node node node-expand-state depth)))))
+  (cl-destructuring-bind (id node) assoc
+    (cl-destructuring-bind (expanded child-expand-state) expand-state
+      (kaitai--insert-expand-symbol
+       (when (kaitai--node-expandable-p node)
+         (if expanded 'close 'open)))
+      (insert-char ?\s)
+      (kaitai--insert-id id)
+      (insert-char ?\s)
+      (kaitai--insert-node-summary node)
+      (when (and (kaitai--node-expandable-p node) expanded)
+        (let ((depth (1+ depth)))
+          (kaitai--insert-newline depth)
+          (kaitai--insert-node node node-expand-state depth))))))
 
 (defun kaitai--insert-expand-symbol (type)
   (insert-char
