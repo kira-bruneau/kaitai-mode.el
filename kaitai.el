@@ -43,7 +43,7 @@
     ;; (add-hook 'change-major-mode-hook 'image-toggle-display-text nil t)
     ;; (add-hook 'write-contents-functions kaitai--save-buffer nil t)
 
-    (rename-buffer (concat " " (buffer-name)))
+    ;; (rename-buffer (concat " " (buffer-name)))
     (kaitai--refresh))
   (run-mode-hooks 'kaitai-mode-hook))
 
@@ -65,7 +65,7 @@
   "Schema used to render a tree from the underlying unibyte buffer")
 
 (defvar-local kaitai--expand-state nil
-  "Tree that models the current expand state of each of the nodes in the schema")
+  "Tree that models the current expand state of each of the expandable nodes in the schema")
 
 (defun kaitai--refresh ()
   (erase-buffer)
@@ -83,7 +83,8 @@
     (`(product . ,product))
     (`(contents . ,contents)
      (kaitai--insert-contents contents))
-    (node (kaitai--insert-leaf node))))
+    ((pred stringp) (kaitai--insert-leaf node))
+    (node (error "unexpected node: %s" node))))
 
 (defun kaitai--node-expandable-p (node)
   (pcase node
@@ -92,29 +93,32 @@
     (node nil)))
 
 (defun kaitai--insert-product (product expand-state depth)
-  (kaitai--insert-assoc (car product) (car expand-state) depth)
+  (when (kaitai--insert-assoc (car product) (car expand-state) depth)
+    (setq expand-state (cdr expand-state)))
   (setq product (cdr product))
-  (setq expand-state (cdr expand-state))
   (while product
     (kaitai--insert-newline depth)
-    (kaitai--insert-assoc (car product) (car expand-state) depth)
-    (setq product (cdr product))
-    (setq expand-state (cdr expand-state))))
+    (when (kaitai--insert-assoc (car product) (car expand-state) depth)
+      (setq expand-state (cdr expand-state)))
+    (setq product (cdr product))))
 
 (defun kaitai--insert-assoc (assoc expand-state depth)
   (cl-destructuring-bind (id node) assoc
-    (cl-destructuring-bind (expanded child-expand-state) expand-state
+    (let ((expandable (kaitai--node-expandable-p node))
+          (expanded (car expand-state))
+          (child-expand-state (cadr expand-state)))
       (kaitai--insert-expand-symbol
-       (when (kaitai--node-expandable-p node)
+       (when expandable
          (if expanded 'close 'open)))
       (insert " ")
       (kaitai--insert-id id)
       (insert " ")
       (kaitai--insert-node-summary node)
-      (when (and (kaitai--node-expandable-p node) expanded)
+      (when (and expandable expanded)
         (let ((depth (1+ depth)))
           (kaitai--insert-newline depth)
-          (kaitai--insert-node node node-expand-state depth))))))
+          (kaitai--insert-node node child-expand-state depth)))
+      expandable)))
 
 (defun kaitai--insert-expand-symbol (type)
   (insert
