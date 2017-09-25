@@ -24,7 +24,8 @@
                 (:reserved2 (contents 0 0 0 0 0 0 0))
                 (:id
                  (product
-                  (:game-id "= NZS")
+                  (:manufacturer "= N")
+                  (:game-id "= ZS")
                   (:region "= USA (0x45 = 69)")))
                 (:reserved3 (contents 0))))
               (:boot-code "= [3, 160, 72, 32, 141, 40, 240, 16, ...]")
@@ -64,17 +65,18 @@
 (defvar-local kaitai--schema nil
   "Schema used to render a tree from the underlying unibyte buffer")
 
-(defvar-local kaitai--expand-state nil
+(defvar-local kaitai--expand-states nil
   "Tree that models the current expand state of each of the expandable nodes in the schema")
 
+;;; Rendering Functions
 (defun kaitai--refresh ()
   (erase-buffer)
-  (kaitai--insert-node kaitai--schema kaitai--expand-state 0))
+  (kaitai--insert-node kaitai--schema kaitai--expand-states 0))
 
-(defun kaitai--insert-node (node expand-state depth)
+(defun kaitai--insert-node (node expand-states depth)
   (pcase node
     (`(product . ,product)
-     (kaitai--insert-product product expand-state depth))
+     (kaitai--insert-product product expand-states depth))
     (`(contents . ,contents))
     (node (error "unexpected node: %s" node))))
 
@@ -86,40 +88,42 @@
     ((pred stringp) (kaitai--insert-leaf node))
     (node (error "unexpected node: %s" node))))
 
-(defun kaitai--node-expandable-p (node)
-  (pcase node
-    (`(product . ,product) t)
-    (`(contents . ,contents) nil)
-    (node nil)))
-
-(defun kaitai--insert-product (product expand-state depth)
-  (when (kaitai--insert-assoc (car product) (car expand-state) depth)
-    (setq expand-state (cdr expand-state)))
-  (setq product (cdr product))
-  (while product
-    (kaitai--insert-newline depth)
-    (when (kaitai--insert-assoc (car product) (car expand-state) depth)
-      (setq expand-state (cdr expand-state)))
-    (setq product (cdr product))))
+(defun kaitai--insert-product (product expand-states depth)
+  ;; Possibly use cl-loop instead??
+  (cl-do
+      ((product product (cdr product))
+       (expand-states expand-states
+                      (if (kaitai--node-expandable-p (cl-caddr product))
+                          (cdr expand-states)
+                        expand-states))
+       (newline nil t))
+      ((not product))
+    (when newline
+      (kaitai--insert-newline depth))
+    (let* ((assoc (car product))
+           (expand-state
+            (if (kaitai--node-expandable-p (cadr assoc))
+                (kaitai--unwrap-or (car expand-states) '(nil nil))
+              nil)))
+      (kaitai--insert-assoc assoc expand-state depth))))
 
 (defun kaitai--insert-assoc (assoc expand-state depth)
   (cl-destructuring-bind (id node) assoc
-    (let ((expandable (kaitai--node-expandable-p node))
-          (expanded (car expand-state))
-          (child-expand-state (cadr expand-state)))
-      (kaitai--insert-expand-symbol
-       (when expandable
-         (if expanded 'close 'open)))
-      (insert " ")
-      (kaitai--insert-id id)
-      (insert " ")
-      (kaitai--insert-node-summary node)
-      (when (and expandable expanded)
-        (let ((depth (1+ depth)))
-          (kaitai--insert-newline depth)
-          (kaitai--insert-node node child-expand-state depth)))
-      expandable)))
+    (kaitai--insert-expand-symbol
+     (when expand-state
+       (if (car expand-state) 'close 'open)))
+    (insert " ")
+    (kaitai--insert-id id)
+    (insert " ")
+    (kaitai--insert-node-summary node)
+    (when expand-state
+      (cl-destructuring-bind (expanded expand-state) expand-state
+        (when expanded
+          (let ((depth (1+ depth)))
+            (kaitai--insert-newline depth)
+            (kaitai--insert-node node expand-state depth)))))))
 
+;; TODO: Use toggle/checkbox widget
 (defun kaitai--insert-expand-symbol (type)
   (insert
    (cond
@@ -132,6 +136,7 @@
 
 (defun kaitai--insert-contents (contents)
   (insert "= [")
+  ;; Possibly use cl-loop instead??
   (let ((content (car contents)))
     (when content
       (insert (prin1-to-string content))
