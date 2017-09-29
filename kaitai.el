@@ -46,8 +46,32 @@
 
 (defvar kaitai-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "TAB") 'kaitai-toggle-expand-node)
     (define-key map (kbd "RET") 'kaitai-toggle-expand-node)
+
+    ;; emacs-like navigation keybindings
+    ;; (define-key map (kbd "n") 'next-line)
+    ;; (define-key map (kbd "p") 'previous-line)
+    ;; (define-key map (kbd "e") 'forward-sexp)
+    ;; (define-key map (kbd "a") 'backward-sexp)
+
+    ;; vim-like: (querty: hjkl, colemak: hnei) navigation keybindings
+    ;; (define-key map (kbd "n") 'next-line)
+    ;; (define-key map (kbd "e") 'previous-line)
+    ;; (define-key map (kbd "i") 'forward-sexp)
+    ;; (define-key map (kbd "h") 'backward-sexp)
+    ;; (define-key map (kbd "o") 'kaitai-toggle-expand-node)
+
+    ;; (query: ijkl, colemak: unei) navigation keybindings
+    (define-key map (kbd "e") 'next-line)
+    (define-key map (kbd "u") 'previous-line)
+    (define-key map (kbd "i") 'forward-sexp)
+    (define-key map (kbd "n") 'backward-sexp)
+    (define-key map (kbd "o") 'kaitai-toggle-expand-node)
+
+    ;; search
+    (define-key map (kbd "s") 'isearch-forward)
+    (define-key map (kbd "r") 'isearch-backward)
+
     map))
 
 (defun kaitai-toggle-expand-node ()
@@ -120,7 +144,7 @@
     (node (error "unexpected node: %s" node))))
 
 (defun kaitai--insert-product (product expand-states depth)
-  ;; Possibly use cl-loop instead??
+  ;; TODO: Possibly use recursion instead
   (cl-do
       ((product product (cdr product))
        (expand-states expand-states
@@ -140,7 +164,6 @@
 
 (defun kaitai--insert-contents (contents)
   (insert "= [")
-  ;; Possibly use cl-loop instead??
   (let ((content (car contents)))
     (when content
       (insert (prin1-to-string content))
