@@ -197,20 +197,18 @@
 (defun kaitai--toggle-expand-product (product expand-states line)
   (if product ;; NOTE: It may be too permissive to allow a product to be empty
       (cl-destructuring-bind ((name . node) &rest next-product) product
-        (if (kaitai--node-expandable-p node)
-            ;; TODO: Get rid of optional when things are stable
-            (cl-destructuring-bind (&optional (expand-state '(nil . nil)) &rest next-expand-states) expand-states
-                (cl-destructuring-bind (expand-state . size)
-                    (kaitai--toggle-expand-node node expand-state line)
-                  (cl-destructuring-bind (next-expand-state . next-size)
-                      (kaitai--toggle-expand-product next-product next-expand-states (1- line))
-                    (cons
-                     (cons expand-state next-expand-state)
-                     (+ size next-size)))))
-          ;; TODO: Figure out a way to refactor this to remove code duplication
-          (cl-destructuring-bind (next-expand-state . next-size)
-              (kaitai--toggle-expand-product next-product expand-states (1- line))
-            (cons next-expand-state (1+ next-size)))))
+        ;; TODO: Try to get rid of the if checks through refactoring
+        (let (expandable (kaitai--node-expandable-p node))
+          (cl-destructuring-bind (expand-state . size)
+              (if expandable
+                  (cl-destructuring-bind (&optional (expand-state '(nil . nil)) &rest next-expand-states) expand-states
+                    (kaitai--toggle-expand-node node expand-state line))
+                '(nil . 1))
+            (cl-destructuring-bind (next-expand-state . next-size)
+                (kaitai--toggle-expand-product next-product (if expandable (cdr expand-states) expand-states) (1- line))
+              (cons
+               (if expandable (cons expand-state next-expand-state) next-expand-state)
+               (+ size next-size))))))
     '(nil . 0)))
 
 ;;; Utility Functions
