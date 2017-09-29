@@ -98,23 +98,24 @@
     (kaitai--insert-node-body kaitai--schema kaitai--expand-states 0)
     (goto-char orig-point)))
 
+;; TODO: Use tail call optimization to efficently express this recursive function
 (cl-defun kaitai--insert-named-node ((name . node) expand-state depth)
-  "Insert a named expandable node"
-  ;; TODO: If any of the insertions are empty, don't insert newline/space between them
-  (kaitai--insert-expand-symbol
-   (when expand-state
-     (cl-destructuring-bind (expanded . expand-states) expand-state
-       (if expanded 'close 'open))))
-  (insert " ")
-  (kaitai--insert-node-name name)
-  (insert " ")
-  (kaitai--insert-node-summary node)
-  (when expand-state
-    (cl-destructuring-bind (expanded . expand-states) expand-state
-      (when expanded
-        (let ((depth (1+ depth)))
-          (kaitai--insert-newline depth)
-          (kaitai--insert-node-body node expand-states depth))))))
+  "Insert a named expandable node, expand-state is ignored if the node is not expandable"
+  (let ((expandable (kaitai--node-expandable-p node)))
+    (kaitai--insert-expand-symbol
+     (when expandable
+       (cl-destructuring-bind (expanded . expand-states) expand-state
+         (if expanded 'close 'open))))
+    (insert " ") ;; TODO: don't insert space if node doesn't have a name
+    (kaitai--insert-node-name name)
+    (insert " ") ;; TODO: don't insert space if node doesn't have a summary
+    (kaitai--insert-node-summary node)
+    (when expandable
+      (cl-destructuring-bind (expanded . expand-states) expand-state
+        (when expanded
+          (let ((depth (1+ depth)))
+            (kaitai--insert-newline depth)
+            (kaitai--insert-node-body node expand-states depth)))))))
 
 ;; TODO: Use toggle/checkbox widget
 (defun kaitai--insert-expand-symbol (type)
@@ -133,43 +134,36 @@
     (`(contents . ,contents)
      (kaitai--insert-contents contents))
     ((pred stringp) (kaitai--insert-leaf node))
-    (node (error "unexpected node: %s" node))))
+    (node (error "invalid node: %s" node))))
 
+;; TODO: Use tail call optimization to efficently express this recursive function
 (defun kaitai--insert-node-body (node expand-states depth)
   (pcase node
     (`(product . ,product)
      (kaitai--insert-product product expand-states depth))
-    (`(contents . ,contents))
-    ((pred stringp))
-    (node (error "unexpected node: %s" node))))
+    ;; TODO: error should be clearer that `contents' and `string' are valid nodes, but don't have a body
+    (node (error "invalid node: %s" node))))
 
+;; TODO: Use tail call optimization to efficently express this recursive function
 (defun kaitai--insert-product (product expand-states depth)
-  ;; TODO: Possibly use recursion instead
-  (cl-do
-      ((product product (cdr product))
-       (expand-states expand-states
-                      (if (kaitai--node-expandable-p (cadr product))
-                          (cdr expand-states)
-                        expand-states))
-       (newline nil t))
-      ((not product))
-    (when newline
-      (kaitai--insert-newline depth))
-    (let* ((named-node (car product))
-           (expand-state
-            (if (kaitai--node-expandable-p (cdr named-node))
-                (kaitai--unwrap-or (car expand-states) '(nil . nil))
-              nil)))
-      (kaitai--insert-named-node named-node expand-state depth))))
+  (cl-destructuring-bind ((&whole named-node name . node) &rest next-product) product
+    (cl-destructuring-bind (expand-state &rest next-expand-states)
+        (if (kaitai--node-expandable-p node)
+            (if expand-states expand-states '((nil . nil) . nil))
+          (cons nil expand-states))
+      (kaitai--insert-named-node named-node expand-state depth)
+      (when next-product
+        (kaitai--insert-newline depth)
+        (kaitai--insert-product next-product next-expand-states depth)))))
 
 (defun kaitai--insert-contents (contents)
   (insert "= [")
-  (let ((content (car contents)))
-    (when content
-      (insert (prin1-to-string content))
-      (dolist (content (cdr contents))
-        (insert ", ")
-        (insert (prin1-to-string content)))))
+  ;; TODO: Possibly use recursion (maybe with y-combinator) to get rid of the code duplication
+  (cl-destructuring-bind (content &rest contents) contents
+    (insert (prin1-to-string content))
+    (dolist (content contents)
+      (insert ", ")
+      (insert (prin1-to-string content))))
   (insert "]"))
 
 (defun kaitai--insert-leaf (leaf)
@@ -180,7 +174,7 @@
   (insert-char ?\s (* depth 2)))
 
 ;;; Toggle Expansion Functions
-(cl-defun kaitai--toggle-expand-node (node expand-state line)
+(defun kaitai--toggle-expand-node (node expand-state line)
   (cl-destructuring-bind (expanded . expand-states) expand-state
     (if (eq expanded (zerop line))
         (cons (cons nil expand-states) 1)
@@ -192,7 +186,8 @@
   (pcase node
     (`(product . ,product)
      (kaitai--toggle-expand-product product expand-states line))
-    (node (error "unexpected node: %s" node))))
+    ;; TODO: error should be clearer that `contents' and `string' are valid nodes, but don't have a body
+    (node (error "invalid node: %s" node))))
 
 (defun kaitai--toggle-expand-product (product expand-states line)
   (if product ;; NOTE: It may be too permissive to allow a product to be empty
