@@ -126,7 +126,9 @@
      (_ " "))))
 
 (defun kaitai--insert-node-name (name)
-  (insert (symbol-name name)))
+  (let ((start (point)))
+    (insert (symbol-name name))
+    (put-text-property start (point) 'face 'bold)))
 
 (defun kaitai--insert-node-summary (node)
   (pcase node
