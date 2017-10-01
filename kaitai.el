@@ -146,8 +146,8 @@
 
 ;; TODO: Use tail call optimization to efficently express this recursive function
 (defun kaitai--insert-product (product expand-states depth)
-  (cl-destructuring-bind ((&whole named-node name . node) &rest next-product) product
-    (cl-destructuring-bind (expand-state &rest next-expand-states)
+  (cl-destructuring-bind ((&whole named-node name . node) . next-product) product
+    (cl-destructuring-bind (expand-state . next-expand-states)
         (if (kaitai--node-expandable-p node)
             (if expand-states expand-states '((nil . nil) . nil))
           (cons nil expand-states))
@@ -159,7 +159,7 @@
 (defun kaitai--insert-contents (contents)
   (insert "= [")
   ;; TODO: Possibly use recursion (maybe with y-combinator) to get rid of the code duplication
-  (cl-destructuring-bind (content &rest contents) contents
+  (cl-destructuring-bind (content . contents) contents
     (insert (prin1-to-string content))
     (dolist (content contents)
       (insert ", ")
@@ -178,9 +178,9 @@
   (cl-destructuring-bind (expanded . expand-states) expand-state
     (if (eq expanded (zerop line))
         (cons (cons nil expand-states) 1)
-      (cl-destructuring-bind (sub-expand-states . sub-size)
+      (cl-destructuring-bind (expand-states . size)
           (kaitai--toggle-expand-node-body node expand-states (1- line))
-        (cons (cons t sub-expand-states) (1+ sub-size))))))
+        (cons (cons t expand-states) (1+ size))))))
 
 (defun kaitai--toggle-expand-node-body (node expand-states line)
   (pcase node
@@ -190,21 +190,24 @@
     (node (error "invalid node: %s" node))))
 
 (defun kaitai--toggle-expand-product (product expand-states line)
-  (if product ;; NOTE: It may be too permissive to allow a product to be empty
-      (cl-destructuring-bind ((name . node) &rest next-product) product
-        ;; TODO: Try to get rid of the if checks through refactoring
-        (let (expandable (kaitai--node-expandable-p node))
+  (cl-destructuring-bind ((name . node) . rest-product) product
+    (if (kaitai--node-expandable-p node)
+        (cl-destructuring-bind (&optional (expand-state '(nil . nil)) . rest-expand-states)
+            expand-states
           (cl-destructuring-bind (expand-state . size)
-              (if expandable
-                  (cl-destructuring-bind (&optional (expand-state '(nil . nil)) &rest next-expand-states) expand-states
-                    (kaitai--toggle-expand-node node expand-state line))
-                '(nil . 1))
-            (cl-destructuring-bind (next-expand-state . next-size)
-                (kaitai--toggle-expand-product next-product (if expandable (cdr expand-states) expand-states) (1- line))
-              (cons
-               (if expandable (cons expand-state next-expand-state) next-expand-state)
-               (+ size next-size))))))
-    '(nil . 0)))
+              (kaitai--toggle-expand-node node expand-state line)
+            (if rest-product
+                (cl-destructuring-bind (rest-expand-states . rest-size)
+                    (kaitai--toggle-expand-product rest-product rest-expand-states (1- line))
+                  (cons
+                   (cons expand-state rest-expand-states)
+                   (+ size rest-size)))
+                (cons expand-state size))))
+      (if rest-product
+          (cl-destructuring-bind (rest-expand-states . rest-size)
+              (kaitai--toggle-expand-product rest-product expand-states (1- line))
+            (cons rest-expand-states (1+ rest-size)))
+        '(nil . 1)))))
 
 ;;; Utility Functions
 (defun kaitai--node-expandable-p (node)
