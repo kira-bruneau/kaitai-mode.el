@@ -12,22 +12,21 @@
           (if schema schema
             '(product
                (header . (product
-                 (magic . (contents 0x80 0x37 0x12 0x40))
-                 (clock . "= 0xF = 15")
-                 (pc . "= 0x80080000 = 2148007936")
-                 (release . "= 0x144B = 5195")
-                 (crc1 . "= 0x5354631C = 1398039324")
-                 (crc2 . "= 0x3A2DEF0 = 61005552")
-                 (reserved1 . (contents 0 0 0 0 0 0 0 0))
-                 (name . "= ZELDA MAJORA'S MASK")
-                 (reserved2 . (contents 0 0 0 0 0 0 0))
-                 (id . (product
-                   (manufacturer . "= N")
-                   (game-id . "= ZS")
-                   (region . "= USA (0x45 = 69)")))
-                 (reserved3 . (contents 0))))
-              (boot-code . "= [3, 160, 72, 32, 141, 40, 240, 16, ...]")
-              (code . "= [60, 8, 128, 10, 37, 8, 149, 0, ...]")))
+                 (magic . (power byte 4)) ;; 0x80 0x37 0x12 0x40
+                 (clock . (power byte 4))
+                 (pc . (power byte 4))
+                 (release . (power byte 4))
+                 (crc1 . (power byte 4))
+                 (crc2 . (power byte 4))
+                 (_ . (power byte 8)) ;; zero
+                 (name . (power byte 20))
+                 (_ . (power byte 7)) ;; zero
+                 (cartridge-id . (product
+                   (game-id . (power byte 3))
+                   (region . (power byte 1))))
+                 (_ . (power byte 1)))) ;; zero
+              (boot-code . (power byte 4032))
+              (code . (power byte))))
           major-mode 'kaitai-mode
           mode-name (format "Kaitai[%s]" "z64"))
 
@@ -133,17 +132,24 @@
 (defun kaitai--insert-node-summary (node)
   (pcase node
     (`(product . ,product))
-    (`(contents . ,contents)
-     (kaitai--insert-contents contents))
+    (`(power . ,power)
+     (kaitai--insert-power-summary power))
     ((pred stringp) (kaitai--insert-leaf node))
     (node (error "invalid node: %s" node))))
+
+(cl-defun kaitai--insert-power-summary ((base &optional exponent))
+  (insert "= [")
+  (insert (prin1-to-string base))
+  (when exponent
+    (insert "; ")
+    (insert (prin1-to-string exponent)))
+  (insert "]"))
 
 ;; TODO: Use tail call optimization to efficently express this recursive function
 (defun kaitai--insert-node-body (node expand-states depth)
   (pcase node
     (`(product . ,product)
      (kaitai--insert-product product expand-states depth))
-    ;; TODO: error should be clearer that `contents' and `string' are valid nodes, but don't have a body
     (node (error "invalid node: %s" node))))
 
 ;; TODO: Use tail call optimization to efficently express this recursive function
@@ -157,16 +163,6 @@
       (when next-product
         (kaitai--insert-newline depth)
         (kaitai--insert-product next-product next-expand-states depth)))))
-
-(defun kaitai--insert-contents (contents)
-  (insert "= [")
-  ;; TODO: Possibly use recursion (maybe with y-combinator) to get rid of the code duplication
-  (cl-destructuring-bind (content . contents) contents
-    (insert (prin1-to-string content))
-    (dolist (content contents)
-      (insert ", ")
-      (insert (prin1-to-string content))))
-  (insert "]"))
 
 (defun kaitai--insert-leaf (leaf)
   (insert leaf))
@@ -188,7 +184,6 @@
   (pcase node
     (`(product . ,product)
      (kaitai--toggle-expand-product product expand-states line))
-    ;; TODO: error should be clearer that `contents' and `string' are valid nodes, but don't have a body
     (node (error "invalid node: %s" node))))
 
 (defun kaitai--toggle-expand-product (product expand-states line)
