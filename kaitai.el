@@ -40,7 +40,8 @@
     ;; (add-hook 'write-contents-functions kaitai--save-buffer nil t)
 
     ;; (rename-buffer (concat " " (buffer-name)))
-    (kaitai--refresh))
+    (kaitai--refresh)
+    (setq buffer-read-only t))
   (run-mode-hooks 'kaitai-mode-hook))
 
 (defvar kaitai-mode-map
@@ -92,7 +93,8 @@
 
 ;;; Rendering Functions
 (defun kaitai--refresh ()
-  (let ((orig-point (point)))
+  (let ((orig-point (point))
+        (inhibit-read-only t))
     (erase-buffer)
     (kaitai--insert-node-body kaitai--schema kaitai--expand-states 0)
     (goto-char orig-point)))
