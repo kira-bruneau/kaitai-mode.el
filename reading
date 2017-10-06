@@ -1,0 +1,40 @@
+Péossible sources:
+- file:
+  (set-buffer-multibyte nil)
+  (setq buffer-file-coding-system 'binary) ;; raw-text
+  (insert-file-contents-literally FILENAME VISIT BEG END)
+  (buffer-substring-no-properties START END)
+
+- buffer:
+  (set-buffer-multibyte nil)
+  (setq buffer-file-coding-system 'binary) ;; nil => no code conversion
+  (buffer-substring-no-properties START END)
+
+
+;; If it's a file, then welp...
+
+bool:
+ 0 => false
+ 1 => true
+
+uint:
+ 0 => 0 + '0'
+ 1 => 1 + '0'
+ 2 => 2 + '0'
+ 3 => 3 + '0'
+ 4 => 4 + '0'
+ 5 => 5 + '0'
+ 6 => 6 + '0'
+ 7 => 7 + '0'
+ 8 => 8 + '0'
+ 9 => 9 + '0'
+ 10 => 1 + '0', 0 + '0'
+ 11 => 1 + '0', 1 + '0'
+ 12 => 1 + '0', 2 + '0'
+ ...
+ div+mod the buffer until it's zero,
+ first value is last digit
+
+int:
+  sign = first bit is set and rest is not zero
+  value = uint, or 2's complement when sign is set

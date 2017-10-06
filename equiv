@@ -1,0 +1,35 @@
+false ⊃ 0 ⊃ bottom type ("exception")
+true ⊃ 1 ⊃ unit type ("void")
+true ⊃ ...
+true ⊃ ∞/variable ⊃ top type (untyped variable)
+
+not ⊂ incrementation ⊂ option type (nullable value)
+xor ⊂ addition ⊂ sum type (enum + union)
+and ⊂ multiplication ⊂ product type (structs/tuples/cons cell)
+implication ⊂ exponentiation ⊂ function type (functions/arrays/dictionaries...)
+
+multi-input implication??? ⊂ tetration ⊂ dimensional mapping (R3 -> R, distance formula, ...)
+pentation ⊂ generic dimensional mapping??? (Rn -> R, generic distance formula, ...)
+
+Then what is the difference between x^y^z vs x^yz??? Is currying too generic?
+
+Other Equivalences:
+or ⊂ power set
+
+TODO: Compare with set theory
+
+Discoveries:
+- Predicate logic is a restriction of algebra, where every operation is performed modulo 2.
+- Algebra is a restriction of type theory, where every operation is performed on the number of possible states each type describes.
+- Type theory doesn't need inverse functions like in algebra (decrement, subtraction, division, root, logarithm) because it is completely constructive.
+  - But maybe we should still have reduction functions???
+- A power tower is like a multi argument function defined using currying from top to bottom
+
+
+
+
+
+incrementation => number
+addition => sum
+multiplication => product
+exponentation => curried function

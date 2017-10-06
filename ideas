@@ -1,0 +1,44 @@
+- Make read-only
+- Add faces to different nodes
+- Seperate names into a seperate tree
+  - Field names
+  - Type names
+  - Figure out how to flatten/group sequences of the same operation without specifying it in the pure schema!
+    - add -> sum
+    - mul -> product
+- Automatic schema detection
+ - Use product to store collection of every possible schema
+ - Auto detection should exist outside of the language
+ - Brute Force:
+   - Just try each possible schema until you get one that doesn't fail
+ - Compile an Index:
+   - Minimize # of sequential reads
+   - Minimize total size of data read
+- Use "observable/hooked variable" to manage expand-state, basically monads
+  - ovar: create an unamed observable variable
+  - defovar: create a named observable variable (global)
+  - defovar-local: create a named observable variable (buffer local)
+  - set/setq: override on onvar to signal changes to any observers
+  - (defun observe (ovar) ...)
+  - insert-ovar: insert text into a buffer that can change over time
+- Use widgets where possible (text, numbers, arrays, ...), or construct my own widget library
+
+Stream Modes:
+- Sequential (can only read chunks in order)
+  - Must push entire values onto stack
+- Random (random access to any chunk)
+  - Can push references to values onto stack
+
+Indexing:
+- (byte index: usize)(byte offset: byte)
+- (block index: usize)(block offset: block)
+
+
+Meta:
+- field name ** could this determine how repeated operations can be grouped?
+- type name
+- file extension / auto-mode-alist
+- mime type
+- uniform type identifier
+- uri
+- instances (eg methods)

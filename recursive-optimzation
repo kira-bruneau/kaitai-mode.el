@@ -1,0 +1,2 @@
+1) Try to reduce to tail call optimization
+2) Replace self-call with loop

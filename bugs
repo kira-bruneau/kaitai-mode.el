@@ -1,0 +1,8 @@
+- cannot edebug-defun when using dotted cons cell in cl-do, cl-destructing-bind
+  - edebug-syntax-error: Invalid read syntax: "Dotted spec required."
+  - See: https://debbugs.gnu.org/cgi/bugreport.cgi?bug=6415
+- cannot edebug-defun when using cl-defun with destructuring
+  - edebug-syntax-error: Invalid read syntax: "Failed matching"
+  - Maybe it's because in common lisp destructuring is only supported on defmacro?
+  - See: https://www.gnu.org/software/emacs/manual/html_node/cl/Argument-Lists.html
+- xref-find-references doesn't use symbol at point by default
