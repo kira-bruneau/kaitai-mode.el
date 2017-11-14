@@ -85,6 +85,9 @@
     (setq kaitai--expand-states expand-state))
   (kaitai--refresh))
 
+(defvar-local kaitai--source "/home/kira/Downloads/Super Mario 64 (U) [!].z64"
+  "Source file that contains the raw data")
+
 (defvar-local kaitai--schema nil
   "Schema used to render a tree from the underlying unibyte buffer")
 
@@ -96,11 +99,15 @@
   (let ((orig-point (point))
         (inhibit-read-only t))
     (erase-buffer)
-    (kaitai--insert-node-body kaitai--schema kaitai--expand-states 0)
+    (kaitai--insert-node-body
+     kaitai--schema
+     (cons kaitai--source 0)
+     kaitai--expand-states
+     0)
     (goto-char orig-point)))
 
 ;; TODO: Use tail call optimization to efficently express this recursive function
-(cl-defun kaitai--insert-named-node ((name . node) expand-state depth)
+(cl-defun kaitai--insert-named-node ((name . node) stream expand-state depth)
   "Insert a named expandable node, expand-state is ignored if the node is not expandable"
   (let ((expandable (kaitai--node-expandable-p node)))
     (kaitai--insert-expand-symbol
@@ -116,12 +123,12 @@
         (when expanded
           (let ((depth (1+ depth)))
             (kaitai--insert-newline depth)
-            (kaitai--insert-node-body node expand-states depth)))))))
+            (kaitai--insert-node-body node stream expand-states depth)))))))
 
 ;; TODO: Use toggle/checkbox widget
 (defun kaitai--insert-expand-symbol (type)
   (insert
-   (pcase type
+   (pcase-exhaustive type
      ('open "+")
      ('close "-")
      (_ " "))))
@@ -132,15 +139,14 @@
     (put-text-property start (point) 'face 'bold)))
 
 (defun kaitai--insert-node-summary (node)
-  (pcase node
+  (pcase-exhaustive node
     (`(product . ,product))
     (`(power . ,power)
      (kaitai--insert-power-summary power))
-    ((pred stringp) (kaitai--insert-leaf node))
-    (node (error "invalid node: %s" node))))
+    ((pred stringp) (kaitai--insert-leaf node))))
 
 (cl-defun kaitai--insert-power-summary ((base &optional exponent))
-  (insert "= [")
+  (insert "[")
   (insert (prin1-to-string base))
   (when exponent
     (insert "; ")
@@ -148,23 +154,36 @@
   (insert "]"))
 
 ;; TODO: Use tail call optimization to efficently express this recursive function
-(defun kaitai--insert-node-body (node expand-states depth)
-  (pcase node
+(defun kaitai--insert-node-body (node stream expand-states depth)
+  (pcase-exhaustive node
     (`(product . ,product)
-     (kaitai--insert-product product expand-states depth))
-    (node (error "invalid node: %s" node))))
+     (kaitai--insert-product product stream expand-states depth))
+    (`(power . ,power)
+     (kaitai--insert-power power stream))))
 
 ;; TODO: Use tail call optimization to efficently express this recursive function
-(defun kaitai--insert-product (product expand-states depth)
+(defun kaitai--insert-product (product stream expand-states depth)
   (cl-destructuring-bind ((&whole named-node name . node) . next-product) product
     (cl-destructuring-bind (expand-state . next-expand-states)
         (if (kaitai--node-expandable-p node)
             (if expand-states expand-states '((nil . nil) . nil))
           (cons nil expand-states))
-      (kaitai--insert-named-node named-node expand-state depth)
-      (when next-product
-        (kaitai--insert-newline depth)
-        (kaitai--insert-product next-product next-expand-states depth)))))
+      (let ((stream (kaitai--insert-named-node named-node stream expand-state depth)))
+        (when next-product
+          (kaitai--insert-newline depth)
+          (kaitai--insert-product next-product stream next-expand-states depth))))))
+
+(cl-defun kaitai--insert-power ((base &optional size) (filename . pos))
+  (let ((end (pcase-exhaustive base
+               ('byte (if size (+ pos size))))))
+    (let* ((slice (with-temp-buffer
+                    (set-buffer-multibyte nil)
+                    (insert-file-contents-literally filename nil pos end)
+                    (buffer-string)))
+           (hex-view (concat "[" (mapconcat (lambda (byte) (format "0x%X" byte)) slice ", ") "]"))
+           (decimal-view (concat "[" (mapconcat (lambda (byte) (number-to-string byte)) slice ", ") "]")))
+      (insert slice " = " hex-view " = " decimal-view))
+    (cons filename end)))
 
 (defun kaitai--insert-leaf (leaf)
   (insert leaf))
@@ -183,10 +202,9 @@
         (cons (cons t expand-states) (1+ size))))))
 
 (defun kaitai--toggle-expand-node-body (node expand-states line)
-  (pcase node
+  (pcase-exhaustive node
     (`(product . ,product)
-     (kaitai--toggle-expand-product product expand-states line))
-    (node (error "invalid node: %s" node))))
+     (kaitai--toggle-expand-product product expand-states line))))
 
 (defun kaitai--toggle-expand-product (product expand-states line)
   (cl-destructuring-bind ((name . node) . rest-product) product
@@ -211,13 +229,9 @@
 ;;; Utility Functions
 (defun kaitai--node-expandable-p (node)
   "Used to compress the expand-state tree to exclude non-expandable nodes"
-  (pcase node
+  (pcase-exhaustive node
     (`(product . ,product) t)
+    (`(power . ,power) t)
     (_ nil)))
-
-;; I don't think I actually need this
-(defun kaitai--unwrap-or (value default)
-  "Returns value if if non nil, otherwise returns default."
-  (if value value default))
 
 ;; TODO: Create kaitai--bind: a multi-value version of cl-destructuring-bind
