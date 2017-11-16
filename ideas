@@ -1,5 +1,17 @@
-- Make read-only
-- Add faces to different nodes
+Rename:
+ - node-body => node
+ - named-node => name + summary + node
+
+Stream Modes:
+- Sequential (can only read chunks in order)
+  - Must push entire values onto stack
+- Random (random access to any chunk)
+  - Can push references to values onto stack
+
+Indexing:
+- (byte index: usize)(byte offset: byte)
+- (block index: usize)(block offset: block)
+
 - Seperate names into a seperate tree
   - Field names
   - Type names
@@ -22,17 +34,6 @@
   - (defun observe (ovar) ...)
   - insert-ovar: insert text into a buffer that can change over time
 - Use widgets where possible (text, numbers, arrays, ...), or construct my own widget library
-
-Stream Modes:
-- Sequential (can only read chunks in order)
-  - Must push entire values onto stack
-- Random (random access to any chunk)
-  - Can push references to values onto stack
-
-Indexing:
-- (byte index: usize)(byte offset: byte)
-- (block index: usize)(block offset: block)
-
 
 Meta:
 - field name ** could this determine how repeated operations can be grouped?
