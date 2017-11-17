@@ -9,11 +9,11 @@
             '(product
                (header . (product
                  (magic . (eq (power byte 4) (#x80 #x37 #x12 #x40)))
-                 (clock . (uint (power byte 4)))
-                 (pc . (uint (power byte 4)))
-                 (release . (uint (power byte 4)))
-                 (crc1 . (uint (power byte 4)))
-                 (crc2 . (uint (power byte 4)))
+                 (clock . (uint (reverse (power byte 4))))
+                 (pc . (uint (reverse (power byte 4))))
+                 (release . (uint (reverse (power byte 4))))
+                 (crc1 . (uint (reverse (power byte 4))))
+                 (crc2 . (uint (reverse (power byte 4))))
                  (_ . (eq (power byte 8) 0))
                  (name . (str (power byte 20)))
                  (_ . (eq (power byte 7) 0))
@@ -196,9 +196,11 @@
     stream))
 
 (defun kaitai--insert-uint (schema stream)
-  (bind (((slice . stream) (kaitai--stream-read stream (car (kaitai--sizeof-uint schema stream)))))
-    (message "todo: convert entire slice into a number, requires bigint division and modulo")
-    (insert (int-to-string (aref slice 0)))
+  (bind (((slice . stream) (kaitai--stream-read stream (car (kaitai--sizeof-uint schema stream))))
+         (uint (cons (string-to-list slice) 256))
+         (hex-view (concat "0x" (bigint-to-string uint 16)))
+         (decimal-view (concat (bigint-to-string uint 10))))
+    (insert hex-view " = " decimal-view)
     stream))
 
 (defun kaitai--insert-str (schema stream)
@@ -318,6 +320,81 @@
 
 (cl-defun kaitai--stream-skip ((filename . pos) size)
   (cons filename (+ pos size)))
+
+;;; Bigint Library
+(cl-defun bigint-to-string (n &optional (base 10))
+  (mapconcat
+   (lambda (digit) (list (if (< digit 10)
+                             (+ digit ?0)
+                           (+ (- digit 10) ?A))))
+   (bigint-to-base--inner n base)
+   ""))
+
+(defun bigint-to-base (n base)
+  "Convert a bigint (big-endian) into a new bigint (big-endian) with a different base."
+  (cons (bigint-to-base--inner n base) base))
+
+;; ;; little-endian (recursive, pure)
+;; (defun bigint-to-base--inner (n base)
+;;   (if (bigint-zerop n) nil
+;;     (bind (((quotient . remainder) (bigint-div n base)))
+;;       (cons remainder (bigint-to-base--inner quotient base)))))
+
+;; ;; big-endian (recursive, pure)
+;; (defun bigint-to-base--inner (n base &optional next)
+;;   (if (bigint-zerop n) next
+;;     (bind (((quotient . remainder) (bigint-div n base)))
+;;       (bigint-to-base--inner quotient base (cons remainder next)))))
+
+;; ;; TODO: See if gv-ref/gv-deref makes things simpler
+;; ;; little-endian (iterative, impure)
+;; (defun bigint-to-base--inner (n base)
+;;   (bind ((result '(t . nil))
+;;          (ptr result))
+;;     (while (not (bigint-zerop n))
+;;       (bind (((quotient . remainder) (bigint-div n base))
+;;              (new-ptr (cons remainder nil)))
+;;         (setq n quotient)
+;;         (setcdr ptr new-ptr)
+;;         (setq ptr new-ptr)))
+;;     (cdr result)))
+
+;; big-endian (iterative, impure)
+(defun bigint-to-base--inner (n base)
+  (bind ((result nil))
+    (while (not (bigint-zerop n))
+      (bind (((quotient . remainder) (bigint-div n base)))
+        (setq n quotient)
+        (setq result (cons remainder result))))
+    result))
+
+(cl-defun bigint-zerop ((digits . base))
+  "Return t if zero."
+  (-all-p 'zerop digits))
+
+;; bigint-add
+
+;; bigint-mul
+
+(cl-defun bigint-div ((&whole dividend digits . base) divisor)
+  "Divides bigint (big-endian) dividend with an int divisor.
+Returns bigint quotient (big-endian) and int remainder."
+  (bind (((quotient . remainder) (bigint-div--inner dividend divisor 0)))
+    (cons (cons quotient base) remainder)))
+
+(cl-defun bigint-div--inner (((digit . remainder) . base) divisor carry)
+  ;; TODO: Use better variable names
+  (bind (((qs . rs) (smallint-div (+ (* carry base) digit) divisor)))
+    (if remainder
+        (bind (((ql . rl) (bigint-div--inner (cons remainder base) divisor rs)))
+          ;; TODO: Calculate (+ (* qs base) ql) instead of (cons qs ql) if result doesn't overflow `most-positive-fixnum'
+          (cons (cons qs ql) rl))
+      (cons (cons qs nil) rs))))
+
+(defun smallint-div (dividend divisor)
+  "Divides two integers.
+Returns quotient and remainder."
+  (cons (/ dividend divisor) (% dividend divisor)))
 
 ;;; Utility Functions
 (defmacro bind (bindings &rest body)

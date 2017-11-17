@@ -1,3 +1,8 @@
+- skip over bytes in a stream when node is collapsed
+  - solution: create functions that determine byte-size of data
+- use bigints for displaying uint
+
+
 - cannot edebug-defun when using dotted cons cell in cl-do, cl-destructing-bind
   - edebug-syntax-error: Invalid read syntax: "Dotted spec required."
   - See: https://debbugs.gnu.org/cgi/bugreport.cgi?bug=6415
