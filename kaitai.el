@@ -140,30 +140,34 @@
   (pcase-exhaustive node
     (`(product . ,product))
     (`(power . ,power)
-     (kaitai--insert-power-summary power))
+     (cl-destructuring-bind (base &optional exponent) power
+       (insert "[")
+       (insert (prin1-to-string base))
+       (when exponent
+         (insert "; ")
+         (insert (prin1-to-string exponent)))
+       (insert "]")))
 
     (`(reverse ,reverse)
-     (kaitai--insert-reverse-summary reverse))
+     (insert "reversed(")
+     (kaitai--insert-node-summary reverse)
+     (insert ")"))
 
-    ((pred integerp))
-    ('bit)
-    ('byte)
+    ((pred integerp)
+     (insert (int-to-string node)))
+    ('bit
+     (insert "bit"))
+    ('byte
+     (insert "byte"))
 
-    (`(uint ,uint))
-    (`(str ,str))))
-
-(cl-defun kaitai--insert-power-summary ((base &optional exponent))
-  (insert "[")
-  (insert (prin1-to-string base))
-  (when exponent
-    (insert "; ")
-    (insert (prin1-to-string exponent)))
-  (insert "]"))
-
-(defun kaitai--insert-reverse-summary (reverse)
-  (insert "reversed(")
-  (kaitai--insert-node-summary reverse)
-  (insert ")"))
+    (`(uint ,uint)
+     (insert "uint(")
+     (kaitai--insert-node-summary uint)
+     (insert ")"))
+    (`(str ,str)
+     (insert "str(")
+     (kaitai--insert-node-summary str)
+     (insert ")"))))
 
 (defun kaitai--insert-node-body (node stream expand-states depth)
   (pcase-exhaustive node
