@@ -9,17 +9,18 @@
             '(product
                (header . (product
                  (magic . (power byte 4)) ;; 0x80 0x37 0x12 0x40
-                 (clock . (uint 4294967296))
-                 (pc . (uint 4294967296))
-                 (release . (uint 4294967296))
-                 (crc1 . (uint 4294967296))
-                 (crc2 . (uint 4294967296))
+                 (clock . (uint (power byte 4)))
+                 (pc . (uint (power byte 4)))
+                 (release . (uint (power byte 4)))
+                 (crc1 . (uint (power byte 4)))
+                 (crc2 . (uint (power byte 4)))
                  (_ . (power byte 8)) ;; zero
-                 (name . (power byte 20))
+                 (name . (str (power byte 20)))
                  (_ . (power byte 7)) ;; zero
-                 (cartridge-id . (product
-                   (game-id . (power byte 3))
-                   (region . byte)))
+                 (cartridge-code . (str (product
+                   (manufacturer-code . (str byte))
+                   (game-code . (str (power byte 2)))
+                   (region-code . (str byte)))))
                  (_ . (power byte 1)))) ;; zero
               (boot-code . (power byte 4032))
               (code . (power byte))))
@@ -101,29 +102,60 @@
   (let ((orig-point (point))
         (inhibit-read-only t))
     (erase-buffer)
-    (kaitai--insert-node-body
+    (kaitai--insert-node
      kaitai--schema
      (cons kaitai--source 0)
      kaitai--expand-states
      0)
     (goto-char orig-point)))
 
+(defun kaitai--insert-node (schema stream expand-states depth)
+  (pcase-exhaustive schema
+    (`(product . ,schema)
+     (kaitai--insert-product schema stream expand-states depth))
+    (`(power . ,schema)
+     ;; TODO: Allow 0 exponent in power
+     (kaitai--insert-power schema stream expand-states depth))
+
+    ((pred integerp)
+     (kaitai--insert-uint schema stream))
+    ('bool
+     (kaitai-insert-bool stream))
+    ('byte
+     (kaitai--insert-byte stream))
+
+    (`(uint ,schema)
+     (kaitai--insert-uint schema stream))
+    (`(str ,schema)
+     (kaitai--insert-str schema stream))
+
+    (`(reverse ,schema)
+     (kaitai--insert-reverse schema stream))))
+
 ;; TODO: Use tail call optimization to efficently express this recursive function
-(cl-defun kaitai--insert-named-node ((name . node) stream expand-state depth)
+(cl-defun kaitai--insert-product ((field . rest-product) stream expand-states depth)
+  (cl-destructuring-bind (expand-state . rest-expand-states)
+      (if expand-states expand-states '((nil . nil) . nil))
+    (let ((stream (kaitai--insert-field field stream expand-state depth)))
+      (if (not rest-product) stream
+        (kaitai--insert-newline depth)
+        (kaitai--insert-product rest-product stream rest-expand-states depth)))))
+
+;; TODO: Use tail call optimization to efficently express this recursive function
+(cl-defun kaitai--insert-field ((name . schema) stream expand-state depth)
   (kaitai--insert-expand-symbol
    (cl-destructuring-bind (expanded . expand-states) expand-state
      (if expanded 'close 'open)))
   (insert " ") ;; TODO: don't insert space if node doesn't have a name
-  (kaitai--insert-node-name name)
+  (kaitai--insert-field-name name)
   (insert " ") ;; TODO: don't insert space if node doesn't have a summary
-  (kaitai--insert-node-summary node)
+  (kaitai--insert-field-summary schema)
   (cl-destructuring-bind (expanded . expand-states) expand-state
-    (when expanded
+    (if (not expanded) stream
       (let ((depth (1+ depth)))
         (kaitai--insert-newline depth)
-        (kaitai--insert-node-body node stream expand-states depth)))))
+        (kaitai--insert-node schema stream expand-states depth)))))
 
-;; TODO: Use toggle/checkbox widget
 (defun kaitai--insert-expand-symbol (type)
   (insert
    (pcase-exhaustive type
@@ -131,110 +163,51 @@
      ('close "-")
      (_ " "))))
 
-(defun kaitai--insert-node-name (name)
+(defun kaitai--insert-field-name (name)
   (let ((start (point)))
     (insert (symbol-name name))
     (put-text-property start (point) 'face 'bold)))
 
-(defun kaitai--insert-node-summary (node)
-  (pcase-exhaustive node
-    (`(product . ,product))
-    (`(power . ,power)
-     (cl-destructuring-bind (base &optional exponent) power
-       (insert "[")
-       (insert (prin1-to-string base))
-       (when exponent
-         (insert "; ")
-         (insert (prin1-to-string exponent)))
-       (insert "]")))
-
-    (`(reverse ,reverse)
-     (insert "reversed(")
-     (kaitai--insert-node-summary reverse)
-     (insert ")"))
-
-    ((pred integerp)
-     (insert (int-to-string node)))
-    ('bit
-     (insert "bit"))
-    ('byte
-     (insert "byte"))
-
-    (`(uint ,uint)
-     (insert "uint(")
-     (kaitai--insert-node-summary uint)
-     (insert ")"))
-    (`(str ,str)
-     (insert "str(")
-     (kaitai--insert-node-summary str)
-     (insert ")"))))
-
-(defun kaitai--insert-node-body (node stream expand-states depth)
-  (pcase-exhaustive node
-    (`(product . ,product)
-     (kaitai--insert-product product stream expand-states depth))
-    (`(power . ,power)
-     (kaitai--insert-power power stream expand-states depth))
-
-    ((pred integerp)
-     (kaitai--insert-uint node stream))
-    ('bit
-     (kaitai-insert-bit stream))
-    ('byte
-     (kaitai--insert-byte stream))
-
-    (`(uint ,uint)
-     (kaitai--insert-uint uint stream))
-    (`(str ,str)
-     (kaitai--insert-str str stream))
-
-    (`(reverse ,reverse)
-     (kaitai--insert-reverse reverse stream))))
-
-;; TODO: Use tail call optimization to efficently express this recursive function
-(cl-defun kaitai--insert-product ((named-node . next-product) stream expand-states depth)
-  (cl-destructuring-bind (expand-state . next-expand-states)
-      (if expand-states expand-states '((nil . nil) . nil))
-    (let ((stream (kaitai--insert-named-node named-node stream expand-state depth)))
-      (if (not next-product) stream
-        (kaitai--insert-newline depth)
-        (kaitai--insert-product next-product stream next-expand-states depth)))))
+(defun kaitai--insert-field-summary (schema)
+  (let ((start (point)))
+    ;; TODO: don't show product body in summary
+    (insert (prin1-to-string schema))
+    (put-text-property start (point) 'face 'shadow)))
 
 ;; TODO: Use tail call optimization to efficently express this recursive function
 (cl-defun kaitai--insert-power ((base exponent) stream expand-states depth)
-  (cl-destructuring-bind (expand-state . next-expand-states)
+  (cl-destructuring-bind (expand-state . rest-expand-states)
       (if expand-states expand-states '((nil . nil) . nil))
-    (let ((stream (kaitai--insert-node-body base stream expand-states depth))
+    (let ((stream (kaitai--insert-node base stream expand-states depth))
           (exponent (1- exponent)))
         (if (zerop exponent) stream
           (insert " ")
-          (kaitai--insert-power (list base exponent) stream next-expand-states depth)))))
+          (kaitai--insert-power (list base exponent) stream rest-expand-states depth)))))
 
-(defun kaitai--insert-bit (stream)
+(defun kaitai--insert-bool (stream)
   (error "todo: requires sub-byte streaming"))
 
 (defun kaitai--insert-byte (stream)
-  (cl-destructuring-bind (slice . stream) (kaitai--read-slice stream 1)
+  (cl-destructuring-bind (slice . stream)
+      (kaitai--stream-read stream (kaitai--sizeof-byte))
     (insert (format "0x%X" (aref slice 0)))
     stream))
 
 (defun kaitai--insert-uint (schema stream)
-  (message "todo: support non integer schema, subbyte-streaming")
-  (cl-destructuring-bind (slice . stream) (kaitai--read-slice stream (/ (logb schema) 8))
+  (cl-destructuring-bind (slice . stream)
+      (kaitai--stream-read stream (car (kaitai--sizeof-uint schema stream)))
     (message "todo: convert entire slice into a number, requires bigint division and modulo")
     (insert (int-to-string (aref slice 0)))
     stream))
 
 (defun kaitai--insert-str (schema stream)
-  (message "todo: support non integer schema, subbyte-streaming")
-  (cl-destructuring-bind (slice . stream) (kaitai--read-slice stream schema)
+  (cl-destructuring-bind (slice . stream)
+      (kaitai--stream-read stream (car (kaitai--sizeof-str schema stream)))
     (insert slice)
     stream))
 
 (defun kaitai--insert-reverse (reverse stream)
   (pcase-exhaustive reverse
-    (`(product . ,product)
-     (kaitai--insert-product (reverse product) stream expand-states depth))
     (`(power . ,power)
      (error "todo: I am not sure how to implement this"))))
 
@@ -242,14 +215,78 @@
   (newline)
   (insert-char ?\s (* depth 2)))
 
-;;; Reading Functions
+;;; Sizeof Functions
+(defun kaitai--sizeof-node (schema stream)
+  (pcase-exhaustive schema
+    (`(product . ,schema)
+     (kaitai--sizeof-product schema stream))
+    (`(power . ,schema)
+     (kaitai--sizeof-power schema stream))
 
-(cl-defun kaitai--read-slice ((filename . pos) len)
-  (let ((end (+ pos len)))
+    ((pred integerp)
+     (let ((size (kaitai--sizeof-raw schema)))
+       (cons size (kaitai--stream-skip stream size))))
+    ('bool
+     (let ((size (kaitai--sizeof-bool)))
+       (cons size (kaitai--stream-skip stream size))))
+    ('byte
+     (let ((size (kaitai--sizeof-byte)))
+       (cons size (kaitai--stream-skip stream size))))
+
+    (`(uint ,schema)
+     (kaitai--sizeof-uint schema stream))
+    (`(str ,schema)
+     (kaitai--sizeof-str schema stream))
+
+    (`(reverse ,schema)
+     (kaitai--sizeof-reverse schema stream))))
+
+;; TODO: Use tail call optimization to efficently express this recursive function
+(cl-defun kaitai--sizeof-product (((name . schema) . rest-product) stream)
+  (cl-destructuring-bind (size . stream)
+      (kaitai--sizeof-node schema stream)
+    (if (not rest-product) (cons size stream)
+      (cl-destructuring-bind (rest-size . stream)
+          (kaitai--sizeof-product rest-product stream)
+        (cons (+ size rest-size) stream)))))
+
+;; TODO: Use tail call optimization to efficently express this recursive function
+(cl-defun kaitai--sizeof-power ((base exponent) stream)
+  (if (zerop exponent) (cons 0 stream)
+    (cl-destructuring-bind (size . stream)
+        (kaitai--sizeof-node base stream)
+      (cl-destructuring-bind (rest-size . stream)
+          (kaitai--sizeof-power (list base (1- exponent)) stream)
+        (cons (+ size rest-size) stream)))))
+
+(defun kaitai--sizeof-raw (size)
+  (/ (logb size) 8))
+
+(defun kaitai--sizeof-bool ()
+  (error "todo: requires sub-byte streaming"))
+
+(defun kaitai--sizeof-byte ()
+  1)
+
+(defun kaitai--sizeof-uint (schema stream)
+  (kaitai--sizeof-node schema stream))
+
+(defun kaitai--sizeof-str (schema stream)
+  (kaitai--sizeof-node schema stream))
+
+(defun kaitai--sizeof-reverse (schema stream)
+  (kaitai--sizeof-node schema stream))
+
+;;; Reading Functions
+(cl-defun kaitai--stream-read ((filename . pos) size)
+  (let ((end (+ pos size)))
     (with-temp-buffer
       (set-buffer-multibyte nil)
       (insert-file-contents-literally filename nil pos end)
       (cons (buffer-string) (cons filename end)))))
+
+(cl-defun kaitai--stream-skip ((filename . pos) size)
+  (cons filename (+ pos size)))
 
 ;;; Toggle Expansion Functions
 (defun kaitai--toggle-expand-node (node expand-state line)
