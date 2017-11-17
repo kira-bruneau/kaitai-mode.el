@@ -8,20 +8,20 @@
           (if schema schema
             '(product
                (header . (product
-                 (magic . (power byte 4)) ;; 0x80 0x37 0x12 0x40
+                 (magic . (eq (power byte 4) (#x80 #x37 #x12 #x40)))
                  (clock . (uint (power byte 4)))
                  (pc . (uint (power byte 4)))
                  (release . (uint (power byte 4)))
                  (crc1 . (uint (power byte 4)))
                  (crc2 . (uint (power byte 4)))
-                 (_ . (power byte 8)) ;; zero
+                 (_ . (eq (power byte 8) 0))
                  (name . (str (power byte 20)))
-                 (_ . (power byte 7)) ;; zero
+                 (_ . (eq (power byte 7) 0))
                  (cartridge-code . (str (product
                    (manufacturer-code . (str byte))
                    (game-code . (str (power byte 2)))
                    (region-code . (str byte)))))
-                 (_ . (power byte 1)))) ;; zero
+                 (_ . (eq (power byte 1) 0))))
               (boot-code . (power byte 4032))
               (code . (power byte))))
           major-mode 'kaitai-mode
@@ -130,7 +130,9 @@
      (kaitai--insert-str schema stream))
 
     (`(reverse ,schema)
-     (kaitai--insert-reverse schema stream))))
+     (kaitai--insert-reverse schema stream))
+    (`(eq . ,schema)
+     (kaitai--insert-eq schema stream expand-states depth))))
 
 ;; TODO: Use tail call optimization to efficently express this recursive function
 (cl-defun kaitai--insert-product ((field . rest-product) stream expand-states depth)
@@ -206,10 +208,14 @@
     (insert slice)
     stream))
 
-(defun kaitai--insert-reverse (reverse stream)
-  (pcase-exhaustive reverse
+(defun kaitai--insert-reverse (schema stream)
+  (pcase-exhaustive schema
     (`(power . ,power)
      (error "todo: I am not sure how to implement this"))))
+
+(cl-defun kaitai--insert-eq ((schema data) stream expand-states depth)
+  (message "todo: enforce that data matches values in stream")
+  (kaitai--insert-node schema stream expand-states depth))
 
 (defun kaitai--insert-newline (depth)
   (newline)
@@ -239,6 +245,8 @@
      (kaitai--sizeof-str schema stream))
 
     (`(reverse ,schema)
+     (kaitai--sizeof-reverse schema stream))
+    (`(eq . ,schema)
      (kaitai--sizeof-reverse schema stream))))
 
 ;; TODO: Use tail call optimization to efficently express this recursive function
@@ -275,6 +283,9 @@
   (kaitai--sizeof-node schema stream))
 
 (defun kaitai--sizeof-reverse (schema stream)
+  (kaitai--sizeof-node schema stream))
+
+(cl-defun kaitai--sizeof-eq ((schema data) stream)
   (kaitai--sizeof-node schema stream))
 
 ;;; Reading Functions
