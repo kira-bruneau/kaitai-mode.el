@@ -1,5 +1,38 @@
+;;; kaitai-mode.el --- Edit binary files in emacs using Kaitai Struct .ksy files
+
+;; Copyright (C) 2017-2018 Kira Bruneau
+
+;; Author: Kira Bruneau <kira.bruneau@gmail.com>
+;; Keywords: kaitai struct ksy binary
+
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+;;; Commentary:
+
+;;; Code:
+
+(eval-when-compile
+  (require 'cl)
+  (require 'bind))
+
+(require 'kaitai-bigint)
+
+;;;###autoload
 (defun kaitai-mode (&optional schema)
-  "A mode for editing binary files as a kaitai struct"
+  "A mode for editing binary files as a kaitai struct.
+If SCHEMA is nil, attempt to autodetect the appropriate schema"
+  (interactive)
   (delay-mode-hooks
     (kill-all-local-variables)
 
@@ -79,7 +112,7 @@
     map))
 
 (defun kaitai-toggle-expand-node ()
-  "Expand / collapse the kaitai node at point"
+  "Expand / collapse the kaitai node at point."
   (interactive)
   (bind (((expand-state . size)
           (kaitai--toggle-expand-node-body
@@ -198,8 +231,8 @@
 (defun kaitai--insert-uint (schema stream)
   (bind (((slice . stream) (kaitai--stream-read stream (car (kaitai--sizeof-uint schema stream))))
          (uint (cons (string-to-list slice) 256))
-         (hex-view (concat "0x" (bigint-to-string uint 16)))
-         (decimal-view (concat (bigint-to-string uint 10))))
+         (hex-view (concat "0x" (kaitai-bigint-to-string uint 16)))
+         (decimal-view (concat (kaitai-bigint-to-string uint 10))))
     (insert hex-view " = " decimal-view)
     stream))
 
@@ -321,87 +354,6 @@
 (cl-defun kaitai--stream-skip ((filename . pos) size)
   (cons filename (+ pos size)))
 
-;;; Bigint Library
-(cl-defun bigint-to-string (n &optional (base 10))
-  (mapconcat
-   (lambda (digit) (list (if (< digit 10)
-                             (+ digit ?0)
-                           (+ (- digit 10) ?A))))
-   (bigint-to-base--inner n base)
-   ""))
+(provide 'kaitai-mode)
 
-(defun bigint-to-base (n base)
-  "Convert a bigint (big-endian) into a new bigint (big-endian) with a different base."
-  (cons (bigint-to-base--inner n base) base))
-
-;; ;; little-endian (recursive, pure)
-;; (defun bigint-to-base--inner (n base)
-;;   (if (bigint-zerop n) nil
-;;     (bind (((quotient . remainder) (bigint-div n base)))
-;;       (cons remainder (bigint-to-base--inner quotient base)))))
-
-;; ;; big-endian (recursive, pure)
-;; (defun bigint-to-base--inner (n base &optional next)
-;;   (if (bigint-zerop n) next
-;;     (bind (((quotient . remainder) (bigint-div n base)))
-;;       (bigint-to-base--inner quotient base (cons remainder next)))))
-
-;; ;; TODO: See if gv-ref/gv-deref makes things simpler
-;; ;; little-endian (iterative, impure)
-;; (defun bigint-to-base--inner (n base)
-;;   (bind ((result '(t . nil))
-;;          (ptr result))
-;;     (while (not (bigint-zerop n))
-;;       (bind (((quotient . remainder) (bigint-div n base))
-;;              (new-ptr (cons remainder nil)))
-;;         (setq n quotient)
-;;         (setcdr ptr new-ptr)
-;;         (setq ptr new-ptr)))
-;;     (cdr result)))
-
-;; big-endian (iterative, impure)
-(defun bigint-to-base--inner (n base)
-  (bind ((result nil))
-    (while (not (bigint-zerop n))
-      (bind (((quotient . remainder) (bigint-div n base)))
-        (setq n quotient)
-        (setq result (cons remainder result))))
-    result))
-
-(cl-defun bigint-zerop ((digits . base))
-  "Return t if zero."
-  (-all-p 'zerop digits))
-
-;; bigint-add
-
-;; bigint-mul
-
-(cl-defun bigint-div ((&whole dividend digits . base) divisor)
-  "Divides bigint (big-endian) dividend with an int divisor.
-Returns bigint quotient (big-endian) and int remainder."
-  (bind (((quotient . remainder) (bigint-div--inner dividend divisor 0)))
-    (cons (cons quotient base) remainder)))
-
-(cl-defun bigint-div--inner (((digit . remainder) . base) divisor carry)
-  ;; TODO: Use better variable names
-  (bind (((qs . rs) (smallint-div (+ (* carry base) digit) divisor)))
-    (if remainder
-        (bind (((ql . rl) (bigint-div--inner (cons remainder base) divisor rs)))
-          ;; TODO: Calculate (+ (* qs base) ql) instead of (cons qs ql) if result doesn't overflow `most-positive-fixnum'
-          (cons (cons qs ql) rl))
-      (cons (cons qs nil) rs))))
-
-(defun smallint-div (dividend divisor)
-  "Divides two integers.
-Returns quotient and remainder."
-  (cons (/ dividend divisor) (% dividend divisor)))
-
-;;; Utility Functions
-(defmacro bind (bindings &rest body)
-  "A drop-in replacement for `let*' similar to metabang-bind for common lisp.
-Supports destructuring using the same syntax as `cl-destructuring-bind'."
-  ;; This works, but it could probably be optimized to generate only one `let*', instead of one for each binding
-  (declare (indent defun))
-  (cl-destructuring-bind ((args expr) . bindings) bindings
-    (let ((body (if bindings `((bind ,bindings ,@body)) body)))
-      `(cl-destructuring-bind ,args ,expr ,@body))))
+;;; kaitai-mode.el ends here
