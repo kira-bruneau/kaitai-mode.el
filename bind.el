@@ -23,7 +23,7 @@
 ;;; Code:
 
 (eval-when-compile
-  (require 'cl))
+  (require 'cl-macs))
 
 (defmacro bind (bindings &rest body)
   "A drop-in replacement for `let*' similar to metabang-bind for Common Lisp.

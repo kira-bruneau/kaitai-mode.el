@@ -23,9 +23,10 @@
 ;;; Code:
 
 (eval-when-compile
+  (require 'cl-macs)
   (require 'bind))
 
-(require 'cl)
+(require 'cl-extra)
 
 (cl-defun kaitai-bigint-to-string (n &optional (base 10))
   "Convert bigint (big-endian) N to a string."

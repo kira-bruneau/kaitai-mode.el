@@ -23,7 +23,7 @@
 ;;; Code:
 
 (eval-when-compile
-  (require 'cl)
+  (require 'cl-macs)
   (require 'bind))
 
 (require 'kaitai-bigint)
